@@ -17,3 +17,6 @@ This script loads API credentials from a `.env` file (not committed).
 
 	python ai_model.py
 """
+
+## Owner
+This file is created by Thanvir Assif
