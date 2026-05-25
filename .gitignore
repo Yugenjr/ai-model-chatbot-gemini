@@ -1,0 +1,8 @@
+
+
+# Local environment file (contains secrets)
+.env
+
+# Python cache
+__pycache__/
+
