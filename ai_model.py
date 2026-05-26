@@ -110,11 +110,7 @@ current_mode = "default"
 # GEMINI CLIENT
 # =========================================================
 
-client = genai.Client(api_key=API_KEY)
-
-chat = client.chats.create(
-    model=MODEL_NAME
-)
+# Client and chat are created in `main()` via `build_client()`.
 
 
 # =========================================================
@@ -361,192 +357,134 @@ def stream_response(user_text):
 # MAIN
 # =========================================================
 
-def main():
+# (Old interactive main removed — replaced by the consolidated main below.)
+# Define conversation styles with their system prompts
+CONVERSATION_STYLES = {
+    "1": {
+        "name": "Funny",
+        "description": "Humorous and witty with jokes and puns",
+        "prompt": (
+            "You are a hilarious AI assistant who loves using humor, puns, and witty jokes. "
+            "Keep responses entertaining and fun while still being helpful. Use emojis when appropriate!"
+        ),
+    },
+    "2": {
+        "name": "Strict",
+        "description": "Professional, formal, and concise",
+        "prompt": (
+            "You are a professional and formal AI assistant. Provide concise, structured responses. "
+            "Use clear language without unnecessary elaboration. Maintain a professional tone throughout."
+        ),
+    },
+    "3": {
+        "name": "Lengthy",
+        "description": "Comprehensive and detailed explanations",
+        "prompt": (
+            "You are a thorough and comprehensive AI assistant. Provide detailed, in-depth explanations. "
+            "Cover all aspects of the topic, provide examples, and elaborate thoroughly on your answers."
+        ),
+    },
+    "4": {
+        "name": "Casual",
+        "description": "Friendly and conversational",
+        "prompt": (
+            "You are a friendly and casual AI companion. Use a warm, conversational tone. "
+            "Feel free to be relaxed, use casual language, and build a friendly rapport with the user."
+        ),
+    },
+    "5": {
+        "name": "Technical",
+        "description": "Expert-level technical depth and details",
+        "prompt": (
+            "You are an expert technical AI assistant. Provide deep technical insights and details. "
+            "Use technical terminology appropriately, explain complex concepts, and go into implementation details."
+        ),
+    },
+}
 
-    clear_screen()
 
-    console.print(
-        Panel.fit(
-            f"""
-[bold green]Terminal Gemini Chatbot[/bold green]
+def build_client():
+    try:
+        from google import genai
+    except ImportError as exc:
+        raise SystemExit(
+            "Missing dependency: google-genai. Install it with: pip install -r requirements.txt"
+        ) from exc
 
-Model : {MODEL_NAME}
-Mode  : {current_mode}
+    return genai.Client(api_key=API_KEY)
 
-Type /help for commands.
-""",
-            border_style="green"
-        )
-    )
 
-    session_history = InMemoryHistory()
+
+def select_conversation_style() -> tuple[str, str]:
+    """Display style options and get user selection. Returns (style_name, system_prompt)"""
+    print("\n" + "=" * 60)
+    print("🎭 Choose Your Conversation Style")
+    print("=" * 60)
+
+    for key, style in CONVERSATION_STYLES.items():
+        print(f"{key}. {style['name']:12} - {style['description']}")
+
+    print("=" * 60)
 
     while True:
+        choice = input("Select a style (1-5): ").strip()
+        if choice in CONVERSATION_STYLES:
+            selected_style = CONVERSATION_STYLES[choice]
+            print(f"\n✅ Selected: {selected_style['name']} style\n")
+            return selected_style["name"], selected_style["prompt"]
+        else:
+            print("❌ Invalid choice. Please select 1-5.")
 
+
+def main() -> int:
+    client = build_client()
+    model_name = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
+
+    # Get user's preferred conversation style
+    style_name, system_prompt = select_conversation_style()
+
+    # create global chat so stream_response() can access it
+    global chat
+    chat = client.chats.create(model=model_name)
+
+    # Initialize conversation with the system prompt
+    try:
+        initial_response = chat.send_message(
+            f"[System Instructions: {system_prompt}]\n\n"
+            "Ready to chat! Keep these instructions in mind for all future responses."
+        )
+    except Exception as exc:
+        print(f"Error initializing chat: {exc}", file=sys.stderr)
+        return 1
+
+    print(f"Gemini chat ready using {model_name} ({style_name} style).")
+    print('Type your message and press Enter. Type "exit" or "quit" to stop.')
+    print("-" * 60)
+
+    # Enter interactive loop
+    while True:
         try:
-            user_text = prompt(
-                "\nYou: ",
-                history=session_history,
-                multiline=False
-            ).strip()
-
+            user_text = prompt("\nYou: ", history=InMemoryHistory(), multiline=False).strip()
         except (KeyboardInterrupt, EOFError):
-            console.print(
-                "\n[bold red]Exiting chatbot...[/bold red]"
-            )
+            console.print("\n[bold red]Exiting chatbot...[/bold red]")
             break
 
         if not user_text:
             continue
 
-        # =================================================
-        # COMMANDS
-        # =================================================
-
-        if user_text == "/help":
-            show_help()
-            continue
-
-        elif user_text == "/clear":
-            clear_screen()
-            continue
-
-        elif user_text == "/history":
-            show_history()
-            continue
-
-        elif user_text == "/save":
-            save_chat()
-
-            console.print(
-                "[green]Session saved.[/green]"
-            )
-            continue
-# Define conversation styles with their system prompts
-CONVERSATION_STYLES = {
-	"1": {
-		"name": "Funny",
-		"description": "Humorous and witty with jokes and puns",
-		"prompt": "You are a hilarious AI assistant who loves using humor, puns, and witty jokes. "
-		          "Keep responses entertaining and fun while still being helpful. Use emojis when appropriate!"
-	},
-	"2": {
-		"name": "Strict",
-		"description": "Professional, formal, and concise",
-		"prompt": "You are a professional and formal AI assistant. Provide concise, structured responses. "
-		          "Use clear language without unnecessary elaboration. Maintain a professional tone throughout."
-	},
-	"3": {
-		"name": "Lengthy",
-		"description": "Comprehensive and detailed explanations",
-		"prompt": "You are a thorough and comprehensive AI assistant. Provide detailed, in-depth explanations. "
-		          "Cover all aspects of the topic, provide examples, and elaborate thoroughly on your answers."
-	},
-	"4": {
-		"name": "Casual",
-		"description": "Friendly and conversational",
-		"prompt": "You are a friendly and casual AI companion. Use a warm, conversational tone. "
-		          "Feel free to be relaxed, use casual language, and build a friendly rapport with the user."
-	},
-	"5": {
-		"name": "Technical",
-		"description": "Expert-level technical depth and details",
-		"prompt": "You are an expert technical AI assistant. Provide deep technical insights and details. "
-		          "Use technical terminology appropriately, explain complex concepts, and go into implementation details."
-	}
-}
-
-
-def build_client():
-	try:
-		from google import genai
-	except ImportError as exc:
-		raise SystemExit(
-			"Missing dependency: google-genai. Install it with: pip install -r requirements.txt"
-		) from exc
-
-        elif user_text == "/sessions":
-            list_sessions()
-            continue
-
-        elif user_text == "/load":
-
-            list_sessions()
-
-            path = input(
-                "\nEnter session path: "
-            ).strip()
-
-            if os.path.exists(path):
-                load_session(path)
-            else:
-                console.print(
-                    "[red]File not found[/red]"
-                )
-
-            continue
-def select_conversation_style() -> tuple[str, str]:
-	"""Display style options and get user selection. Returns (style_name, system_prompt)"""
-	print("\n" + "="*60)
-	print("🎭 Choose Your Conversation Style")
-	print("="*60)
-	
-	for key, style in CONVERSATION_STYLES.items():
-		print(f"{key}. {style['name']:12} - {style['description']}")
-	
-	print("="*60)
-	
-	while True:
-		choice = input("Select a style (1-5): ").strip()
-		if choice in CONVERSATION_STYLES:
-			selected_style = CONVERSATION_STYLES[choice]
-			print(f"\n✅ Selected: {selected_style['name']} style\n")
-			return selected_style["name"], selected_style["prompt"]
-		else:
-			print("❌ Invalid choice. Please select 1-5.")
-
-
-def main() -> int:
-	client = build_client()
-	model_name = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
-	
-	# Get user's preferred conversation style
-	style_name, system_prompt = select_conversation_style()
-	
-	chat = client.chats.create(model=model_name)
-	
-	# Initialize conversation with the system prompt
-	try:
-		initial_response = chat.send_message(
-			f"[System Instructions: {system_prompt}]\n\n"
-			"Ready to chat! Keep these instructions in mind for all future responses."
-		)
-	except Exception as exc:
-		print(f"Error initializing chat: {exc}", file=sys.stderr)
-		return 1
-
-	print(f"Gemini chat ready using {model_name} ({style_name} style).")
-	print('Type your message and press Enter. Type "exit" or "quit" to stop.')
-	print("-" * 60)
-
-        elif user_text == "/mode":
+        if user_text == "/mode":
             change_mode()
             continue
 
-        elif user_text == "/tokens":
+        if user_text == "/tokens":
             estimate_tokens()
             continue
 
-        elif user_text in {"/exit", "exit", "quit"}:
-            console.print(
-                "[bold red]Goodbye![/bold red]"
-            )
+        if user_text in {"/exit", "exit", "quit"}:
+            console.print("[bold red]Goodbye![/bold red]")
             break
 
-        # =================================================
         # CHAT RESPONSE
-        # =================================================
-
         stream_response(user_text)
 
 
